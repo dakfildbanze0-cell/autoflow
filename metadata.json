@@ -1,0 +1,6 @@
+{
+  "name": "AutoFlow",
+  "description": "Enterprise-grade social media automation dashboard.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
