@@ -238,6 +238,7 @@ export default function App() {
     // Normalize path to view name mapping
     const pathViewMap: Record<string, string> = {
       'dashboard': 'Dashboard',
+      'painel': 'Dashboard',
       'anuncios': 'Anúncios',
       'publicacoes': 'Publicações',
       'robôs-automações': 'Robôs (automações)',
@@ -247,6 +248,7 @@ export default function App() {
       'relatórios': 'Relatórios',
       'perfil': 'Perfil',
       'integrações': 'Integrações',
+      'conexoes': 'Integrações',
       'modelos': 'Modelos',
       'plano-profissional': 'Plano profissional',
       'configurações': 'Configurações'
@@ -296,6 +298,7 @@ export default function App() {
       } else {
         const pathViewMap: Record<string, string> = {
           'dashboard': 'Dashboard',
+          'painel': 'Dashboard',
           'anuncios': 'Anúncios',
           'publicacoes': 'Publicações',
           'robôs-automações': 'Robôs (automações)',
@@ -305,6 +308,7 @@ export default function App() {
           'relatórios': 'Relatórios',
           'perfil': 'Perfil',
           'integrações': 'Integrações',
+          'conexoes': 'Integrações',
           'modelos': 'Modelos',
           'plano-profissional': 'Plano profissional'
         };

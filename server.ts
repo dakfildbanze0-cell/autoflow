@@ -99,7 +99,7 @@ async function startServer() {
   };
 
   // Specifically handle the /dashboard and other view paths requested for deep linking
-  app.get(['/dashboard', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/clientes', '/equipa', '/modelos', '/financeiro', '/plano-profissional', '/configurações'], async (req: any, res: any) => {
+  app.get(['/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/clientes', '/equipa', '/modelos', '/financeiro', '/plano-profissional', '/configurações'], async (req: any, res: any) => {
     const { code, error } = req.query;
     
     // Auth redirect handling
