@@ -99,7 +99,7 @@ async function startServer() {
   };
 
   // Specifically handle the /dashboard and other view paths requested for deep linking
-  app.get(['/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/clientes', '/equipa', '/modelos', '/financeiro', '/plano-profissional', '/configurações'], async (req: any, res: any) => {
+  app.get(['/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/clientes', '/equipa', '/modelos', '/financeiro', '/plano-profissional', '/configurações'], async (req: any, res: any, next: any) => {
     const { code, error } = req.query;
     
     // Auth redirect handling
@@ -111,8 +111,9 @@ async function startServer() {
       const distPath = path.join(process.cwd(), 'dist');
       return res.sendFile(path.join(distPath, 'index.html'));
     } else {
-      // In dev, we can just serve the root index.html and Vite will process it
-      return res.sendFile(path.join(process.cwd(), 'index.html'));
+      // In dev mode, we MUST let Vite handle the index.html transformation
+      // by calling next() and letting vite.middlewares (SPA mode) take over.
+      next();
     }
   });
 

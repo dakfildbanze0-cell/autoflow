@@ -1696,12 +1696,23 @@ export default function App() {
             <div className="w-12 h-12 bg-gradient-to-tr from-purple-700 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20 animate-pulse">
               <Bot className="text-white" size={24} />
             </div>
-            <h2 className="text-2xl font-black text-white">AutoFlow</h2>
+            <h2 className="text-2xl font-black text-white">Autoflow</h2>
             <p className="text-xs text-gray-400 leading-normal">
               {authState === 'LOGIN' 
                 ? 'Inicie sessão para gerir os seus anúncios e automações' 
                 : 'Crie a sua conta para começar a publicar em lote'}
             </p>
+          </div>
+          
+          {/* Direct link to dashboard if already authenticated in current session */}
+          <div className="flex justify-center">
+            <a 
+              href="/dashboard"
+              onClick={(e) => navigateTo('Dashboard', e)}
+              className="text-[10px] font-bold text-purple-400 hover:text-white transition-all underline underline-offset-4"
+            >
+              Ir diretamente para o dashboard
+            </a>
           </div>
 
           {/* Status banners */}
@@ -1788,7 +1799,7 @@ export default function App() {
           </div>
 
           {/* Public links footer */}
-          <div className="flex border-t border-white/5 pt-2 mt-1 justify-center gap-4">
+          <div className="flex border-t border-white/5 pt-2 mt-1 justify-center gap-2">
             <button 
               onClick={() => {
                 setPublicPath('/terms');
@@ -1869,9 +1880,9 @@ export default function App() {
           
           {/* Helpful Links Section - User request: "cada tela no app deve ter links" */}
           <div className="flex flex-col gap-1 p-2 bg-[#15161c] rounded-lg">
-            <span className="text-xs font-black text-gray-500 uppercase tracking-widest pl-1 mb-1">Links Rápidos</span>
-            <a href="/dashboard" onClick={(e) => navigateTo('Dashboard', e)} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
-              <Globe size={14} /> <span>Página inicial</span>
+            <span className="text-xs font-black text-gray-500 tracking-widest pl-1 mb-1">Links rápidos</span>
+            <a href="/dashboard" onClick={(e) => navigateTo('Dashboard', e)} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1 font-bold">
+              <Globe size={14} /> <span>Ir para o dashboard</span>
             </a>
             <a href="/terms" onClick={(e) => { e.preventDefault(); setPublicPath('/terms'); }} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
               <FileSignature size={14} /> <span>Termos de uso</span>
@@ -1987,7 +1998,7 @@ export default function App() {
             <a 
               href="/dashboard" 
               onClick={(e) => navigateTo('Dashboard', e)}
-              className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:text-white ${currentView === 'Dashboard' ? 'text-purple-500' : 'text-gray-500'}`}
+              className={`text-[10px] font-black tracking-[0.2em] transition-all hover:text-white ${currentView === 'Dashboard' ? 'text-purple-500' : 'text-gray-500'}`}
             >
               Dashboard
             </a>
@@ -1997,7 +2008,7 @@ export default function App() {
                 <a 
                   href={`/${getViewSlug(currentView)}`} 
                   onClick={(e) => navigateTo(currentView, e)}
-                  className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-500 hover:text-purple-400 transition-all"
+                  className="text-[10px] font-black tracking-[0.2em] text-purple-500 hover:text-purple-400 transition-all text-violet-400"
                 >
                   {currentView}
                 </a>
@@ -3995,14 +4006,14 @@ export default function App() {
               <a 
                 href="/terms"
                 onClick={(e) => { e.preventDefault(); setPublicPath('/terms'); }} 
-                className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest"
+                className="text-xs font-bold text-gray-500 hover:text-white transition-colors tracking-widest"
               >
                 Termos
               </a>
               <a 
                 href="/privacy"
                 onClick={(e) => { e.preventDefault(); setPublicPath('/privacy'); }} 
-                className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest"
+                className="text-xs font-bold text-gray-500 hover:text-white transition-colors tracking-widest"
               >
                 Privacidade
               </a>
@@ -4012,7 +4023,7 @@ export default function App() {
                 rel="noreferrer"
                 className="text-xs font-bold text-white bg-purple-600/20 px-3 py-1.5 rounded-full hover:bg-purple-600/40 transition-all flex items-center gap-1.5 border border-purple-500/20"
               >
-                Vercel Dashboard <ArrowRight size={10} />
+                Vercel dashboard <ArrowRight size={10} />
               </a>
             </div>
           </footer>
