@@ -1,8 +1,22 @@
 {
   "rewrites": [
-    {
-      "source": "/(.*)",
-      "destination": "/index.html"
-    }
+    { "source": "/", "destination": "/index.html" },
+    { "source": "/dashboard", "destination": "/index.html" },
+    { "source": "/painel", "destination": "/index.html" },
+    { "source": "/anuncios", "destination": "/index.html" },
+    { "source": "/publicacoes", "destination": "/index.html" },
+    { "source": "/robôs-automações", "destination": "/index.html" },
+    { "source": "/calendario", "destination": "/index.html" },
+    { "source": "/clientes", "destination": "/index.html" },
+    { "source": "/leads", "destination": "/index.html" },
+    { "source": "/relatórios", "destination": "/index.html" },
+    { "source": "/perfil", "destination": "/index.html" },
+    { "source": "/integrações", "destination": "/index.html" },
+    { "source": "/conexoes", "destination": "/index.html" },
+    { "source": "/modelos", "destination": "/index.html" },
+    { "source": "/plano-profissional", "destination": "/index.html" },
+    { "source": "/configurações", "destination": "/index.html" },
+    { "source": "/terms", "destination": "/index.html" },
+    { "source": "/privacy", "destination": "/index.html" }
   ]
 }

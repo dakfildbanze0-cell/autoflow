@@ -99,7 +99,7 @@ async function startServer() {
   };
 
   // Specifically handle the /dashboard and other view paths requested for deep linking
-  app.get(['/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/clientes', '/equipa', '/modelos', '/financeiro', '/plano-profissional', '/configurações'], async (req: any, res: any, next: any) => {
+  app.get(['/', '/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/calendario', '/clientes', '/leads', '/relatórios', '/configurações', '/modelos', '/financeiro', '/plano-profissional', '/terms', '/privacy'], async (req: any, res: any, next: any) => {
     const { code, error } = req.query;
     
     // Auth redirect handling
@@ -307,9 +307,8 @@ async function startServer() {
   } else {
     const distPath = path.join(process.cwd(), 'dist');
     app.use(express.static(distPath));
-    app.get('*', (req, res) => {
-      res.sendFile(path.join(distPath, 'index.html'));
-    });
+    // No catch-all '*' handler here - only predefined routes will serve index.html
+    // This follows the user requirement: "apenas os links definidos devem servir sem excessão"
   }
 
   app.listen(PORT, "0.0.0.0", () => {

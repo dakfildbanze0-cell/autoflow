@@ -266,14 +266,15 @@ export default function App() {
       'conexoes': 'Integrações',
       'modelos': 'Modelos',
       'plano-profissional': 'Plano profissional',
-      'configurações': 'Configurações'
+      'configurações': 'Configurações',
+      'financeiro': 'Dashboard',
+      'equipa': 'Dashboard'
     };
 
     if (pathViewMap[path]) return pathViewMap[path];
     
-    // Fallback basic mapping: robot-manager -> Robot Manager
-    const viewName = path.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
-    return viewName;
+    // Default to Dashboard for any other undefined path
+    return 'Dashboard';
   });
 
   // Helper to normalize view names to URL slugs
@@ -325,9 +326,12 @@ export default function App() {
           'integrações': 'Integrações',
           'conexoes': 'Integrações',
           'modelos': 'Modelos',
-          'plano-profissional': 'Plano profissional'
+          'plano-profissional': 'Plano profissional',
+          'configurações': 'Configurações',
+          'financeiro': 'Dashboard',
+          'equipa': 'Dashboard'
         };
-        const viewName = pathViewMap[path] || path.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        const viewName = pathViewMap[path] || 'Dashboard';
         setCurrentView(viewName);
       }
     };
