@@ -206,7 +206,10 @@ async function startServer() {
     }
 
     if (!code || !config || !config.clientId || !config.clientSecret) {
-      return res.status(400).send('Código ou configuração em falta.');
+      return res.status(400).json({ 
+        error: 'Configuração incompleta', 
+        details: 'Código, ID de Cliente ou Segredo de Cliente em falta para esta plataforma.' 
+      });
     }
 
     try {
@@ -263,7 +266,10 @@ async function startServer() {
       `);
     } catch (err: any) {
       console.error('OAuth exchange error:', err.response?.data || err.message);
-      res.status(500).send(`Erro na troca de token: ${JSON.stringify(err.response?.data || err.message)}`);
+      res.status(500).json({ 
+        error: 'Erro na troca de token OAuth', 
+        details: err.response?.data || err.message 
+      });
     }
   });
 

@@ -48,6 +48,21 @@ interface CallbackProps {
   currentUser: any;
 }
 
+// Helper function to safely parse fetch responses to JSON
+const safeJson = async (response: Response) => {
+  const text = await response.text();
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch (e) {
+    console.error("Failed to parse JSON response:", text);
+    return { 
+      error: "Erro de formato na resposta", 
+      message: "O servidor enviou dados inválidos.",
+      details: text.substring(0, 200) + (text.length > 200 ? '...' : '')
+    };
+  }
+};
+
 function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUser }: CallbackProps) {
   const [status, setStatus] = useState<'LOADING' | 'SUCCESS' | 'ERROR'>('LOADING');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -78,7 +93,7 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
           body: JSON.stringify({ code, platform: 'TikTok' })
         });
 
-        const data = await response.json();
+        const data = await safeJson(response);
 
         if (data.success) {
           setStatus('SUCCESS');
@@ -562,11 +577,11 @@ export default function App() {
     try {
       // 1. Requisitar URL de autorização ao servidor
       const response = await fetch(`/api/auth/url/${platform}`);
+      const data = await safeJson(response);
       
       if (!response.ok) {
         if (authWindow) authWindow.close();
-        const errorData = await response.json();
-        addLog(`Falha na negociação com o gateway de ${platform}: ${errorData.message || 'Não configurado'}`, 'Critico');
+        addLog(`Falha na negociação com o gateway de ${platform}: ${data.message || data.error || 'Não configurado'}`, 'Critico');
         
         // Se for 404 (não configurado), avisar o utilizador como fazer
         if (response.status === 404) {
@@ -574,13 +589,13 @@ export default function App() {
           const varName = platform === 'TikTok' ? 'TIKTOK_CLIENT_KEY' : `${platform.toUpperCase()}_CLIENT_ID`;
           alert(`Configuração necessária:\n\nPara ligar ao ${platform} real (sem simulação), é necessário adicionar o ${varName} e o segredo correspondente nas variáveis de ambiente da aplicação.\n\nCallback URL a configurar na plataforma:\n${redirectUrl}`);
         } else {
-          alert(`Erro ao obter URL de autorização: ${errorData.message || 'Erro desconhecido'}`);
+          alert(`Erro ao obter URL de autorização: ${data.message || data.error || 'Erro desconhecido'}`);
         }
         setConnectingPlatform(null);
         return;
       }
 
-      const { url } = await response.json();
+      const { url } = data;
 
       // 2. Redirecionar a janela já aberta para o portal de login oficial
       authWindow.location.href = url;
