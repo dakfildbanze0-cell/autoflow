@@ -8,7 +8,7 @@ import {
   LayoutDashboard, Megaphone, FileText, Bot, Calendar, Users, 
   Target, BarChart3, Settings, GitBranch, Search, Plus, Bell, 
   Send, Verified, Timer, Menu, Play, Pause, MoreVertical, 
-  MessageSquare, ChevronDown, CheckCircle2, XCircle, ArrowRight, X, ArrowLeft,
+  MessageSquare, ChevronDown, ChevronRight, CheckCircle2, XCircle, ArrowRight, X, ArrowLeft,
   Sparkles, LogOut, Globe, Phone, Mail, FileSignature, PlayCircle, RefreshCw,
   Database, Copy, Check, User, Lock, ShieldCheck, Info, Trash2, Clock
 } from 'lucide-react';
@@ -283,7 +283,7 @@ export default function App() {
   const navigateTo = (view: string, e?: React.MouseEvent) => {
     if (e) e.preventDefault();
     const slug = getViewSlug(view);
-    window.history.pushState({}, '', `/${slug === 'dashboard' ? '' : slug}`);
+    window.history.pushState({}, '', `/${slug}`);
     setCurrentView(view);
   };
 
@@ -1821,7 +1821,7 @@ export default function App() {
             return (
               <a
                 key={item.name}
-                href={slug === 'dashboard' ? '/' : `/${slug}`}
+                href={`/${slug}`}
                 onClick={(e) => navigateTo(item.name, e)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 text-left text-base ${
                   isActive 
@@ -1851,7 +1851,7 @@ export default function App() {
           {/* Helpful Links Section - User request: "cada tela no app deve ter links" */}
           <div className="flex flex-col gap-1 p-2 bg-[#15161c] rounded-lg">
             <span className="text-xs font-black text-gray-500 uppercase tracking-widest pl-1 mb-1">Links Rápidos</span>
-            <a href="/" onClick={(e) => navigateTo('Dashboard', e)} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
+            <a href="/dashboard" onClick={(e) => navigateTo('Dashboard', e)} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
               <Globe size={14} /> <span>Página inicial</span>
             </a>
             <a href="/terms" onClick={(e) => { e.preventDefault(); setPublicPath('/terms'); }} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
@@ -1963,6 +1963,29 @@ export default function App() {
         {/* Content switch box */}
         <div className="p-2 flex flex-col gap-2 max-w-[1200px] w-full mx-auto">
           
+          {/* View Breadcrumb / Link Header - User request: "cada tela no app deve ter links" */}
+          <div className="flex items-center gap-2 px-1 mb-1 animate-in fade-in slide-in-from-top-1 duration-500">
+            <a 
+              href="/dashboard" 
+              onClick={(e) => navigateTo('Dashboard', e)}
+              className={`text-[10px] font-black uppercase tracking-[0.2em] transition-all hover:text-white ${currentView === 'Dashboard' ? 'text-purple-500' : 'text-gray-500'}`}
+            >
+              Dashboard
+            </a>
+            {currentView !== 'Dashboard' && (
+              <>
+                <ChevronRight size={10} className="text-gray-700" />
+                <a 
+                  href={`/${getViewSlug(currentView)}`} 
+                  onClick={(e) => navigateTo(currentView, e)}
+                  className="text-[10px] font-black uppercase tracking-[0.2em] text-purple-500 hover:text-purple-400 transition-all"
+                >
+                  {currentView}
+                </a>
+              </>
+            )}
+          </div>
+
           {/* VIEW: DASHBOARD */}
           {currentView === 'Dashboard' && (
             <div className="flex flex-col gap-2">
