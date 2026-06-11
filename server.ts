@@ -28,11 +28,12 @@ async function startServer() {
         };
       case 'TikTok':
         return {
-          authUrl: 'https://www.tiktok.com/auth/authorize/',
-          tokenUrl: 'https://open-api.tiktok.com/oauth/access_token/',
-          clientId: process.env.TIKTOK_CLIENT_ID,
+          authUrl: 'https://www.tiktok.com/v2/auth/authorize/',
+          tokenUrl: 'https://open.tiktokapis.com/v2/oauth/token/',
+          clientId: process.env.TIKTOK_CLIENT_KEY || process.env.TIKTOK_CLIENT_ID,
           clientSecret: process.env.TIKTOK_CLIENT_SECRET,
-          scope: 'user.info.basic,video.list'
+          scope: 'user.info.basic',
+          redirectUri: 'https://aautoflow.vercel.app/dashboard'
         };
       case 'WhatsApp':
         // WhatsApp Business uses Facebook Login for Business
@@ -54,25 +55,137 @@ async function startServer() {
     const config = getOAuthConfig(platform);
     
     if (!config || !config.clientId) {
-      // If not configured, show a helpful setup page instead of a raw error
+      const idLabel = platform === 'TikTok' ? 'Client Key' : 'Client ID';
       return res.status(404).json({ 
         error: 'Plataforma não configurada',
-        message: `As chaves de API (Client ID) para ${platform} não foram encontradas nas definições da aplicação (Settings > Env Vars).`
+        message: `A chave de API (${idLabel}) para ${platform} não foi encontrada nas definições da aplicação.`
       });
     }
 
     const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
-    const redirectUri = `${appUrl}/auth/callback/${platform}`;
+    const redirectUri = (platform === 'TikTok' && config.redirectUri) 
+      ? config.redirectUri 
+      : `${appUrl}/auth/callback/${platform}`;
     
-    const params = new URLSearchParams({
-      client_id: config.clientId,
-      redirect_uri: redirectUri,
-      scope: config.scope,
-      response_type: 'code',
-      state: Math.random().toString(36).substring(7)
-    });
+    const params = new URLSearchParams();
+    
+    if (platform === 'TikTok') {
+      params.append('client_key', config.clientId!);
+    } else {
+      params.append('client_id', config.clientId!);
+    }
+
+    params.append('redirect_uri', redirectUri);
+    params.append('scope', config.scope!);
+    params.append('response_type', 'code');
+    params.append('state', Math.random().toString(36).substring(7));
 
     res.json({ url: `${config.authUrl}?${params.toString()}` });
+  });
+
+  // Handle deep links and SPA routes
+  const serveSPA = (req: any, res: any) => {
+    const distPath = path.join(process.cwd(), 'dist');
+    if (process.env.NODE_ENV === "production") {
+      res.sendFile(path.join(distPath, 'index.html'));
+    } else {
+      // In dev mode, we redirect to the root so Vite middleware can handle the SPA routing
+      // BUT we preserve the path in the URL. Vite's spa handle should take over.
+      // Actually, in development with middlewareMode: true and appType: 'spa', 
+      // Vite should handle this automatically if we don't catch it.
+      // So we just don't catch it and let it fall through to vite.middlewares.
+      res.sendFile(path.join(process.cwd(), 'index.html'));
+    }
+  };
+
+  // Specifically handle the /dashboard and other view paths requested for deep linking
+  app.get(['/dashboard', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/clientes', '/equipa', '/modelos', '/financeiro', '/plano-profissional', '/configurações'], async (req: any, res: any) => {
+    const { code, error } = req.query;
+    
+    // Auth redirect handling
+    if (code) {
+      return res.redirect(`/?code=${code}&platform=TikTok`);
+    }
+    
+    if (process.env.NODE_ENV === "production") {
+      const distPath = path.join(process.cwd(), 'dist');
+      return res.sendFile(path.join(distPath, 'index.html'));
+    } else {
+      // In dev, we can just serve the root index.html and Vite will process it
+      return res.sendFile(path.join(process.cwd(), 'index.html'));
+    }
+  });
+
+  // Old /callback handler - redirect to /dashboard to avoid broken links
+  app.get('/callback', (req, res) => {
+    const query = new URLSearchParams(req.query as any).toString();
+    res.redirect(`/dashboard${query ? '?' + query : ''}`);
+  });
+
+  // Dedicated API route for frontend to request token exchange
+  app.post('/api/auth/exchange', express.json(), async (req, res) => {
+    const { code, platform } = req.body;
+    const config = getOAuthConfig(platform);
+
+    if (!code || !config || !config.clientId || !config.clientSecret) {
+      return res.status(400).json({ error: 'Código ou configuração em falta.' });
+    }
+
+    try {
+      const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
+      const redirectUri = (platform === 'TikTok' && config.redirectUri) 
+        ? config.redirectUri 
+        : `${appUrl}/auth/callback/${platform}`;
+
+      let tokenResponse;
+      if (platform === 'TikTok') {
+        const body = new URLSearchParams({
+          client_key: config.clientId!,
+          client_secret: config.clientSecret!,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+          code: code as string
+        });
+        tokenResponse = await axios.post(config.tokenUrl, body.toString(), {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+      } else {
+        tokenResponse = await axios.post(config.tokenUrl, {
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+          code: code
+        });
+      }
+
+      // For TikTok, tokens might be in data.data or data
+      const tokenData = tokenResponse.data;
+      const accessToken = tokenData.access_token || tokenData.data?.access_token;
+      const openId = tokenData.open_id || tokenData.data?.open_id;
+
+      let userBasicInfo = null;
+      if (platform === 'TikTok' && accessToken) {
+        try {
+          const infoRes = await axios.get('https://open.tiktokapis.com/v2/user/info/?fields=open_id,union_id,avatar_url,display_name', {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          userBasicInfo = infoRes.data.data?.user;
+        } catch (e) {
+          console.error('Failed to fetch user info:', e);
+        }
+      }
+
+      res.json({ 
+        success: true, 
+        token: accessToken, 
+        openId: openId,
+        user: userBasicInfo 
+      });
+    } catch (err: any) {
+      console.error('Token exchange error:', err.response?.data || err.message);
+      res.status(500).json({ error: 'Erro na troca de token', details: err.response?.data || err.message });
+    }
   });
 
   // 2. OAuth Callback Handler
@@ -101,15 +214,29 @@ async function startServer() {
       const redirectUri = `${appUrl}/auth/callback/${platform}`;
 
       // Exchange code for token
-      const response = await axios.post(config.tokenUrl, {
-        client_id: config.clientId,
-        client_secret: config.clientSecret,
-        grant_type: 'authorization_code',
-        redirect_uri: redirectUri,
-        code: code
-      });
+      let tokenResponse;
+      if (platform === 'TikTok') {
+        const body = new URLSearchParams({
+          client_key: config.clientId!,
+          client_secret: config.clientSecret!,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+          code: code as string
+        });
+        tokenResponse = await axios.post(config.tokenUrl, body.toString(), {
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+        });
+      } else {
+        tokenResponse = await axios.post(config.tokenUrl, {
+          client_id: config.clientId,
+          client_secret: config.clientSecret,
+          grant_type: 'authorization_code',
+          redirect_uri: redirectUri,
+          code: code
+        });
+      }
 
-      const accessToken = response.data.access_token;
+      const accessToken = tokenResponse.data.access_token;
 
       // Send success message and close popup
       res.send(`

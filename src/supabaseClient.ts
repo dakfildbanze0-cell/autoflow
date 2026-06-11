@@ -104,6 +104,7 @@ export interface DbIntegration {
   created_at?: string;
   updated_at?: string;
   profile_name?: string; // Optional: name of the connected account
+  user_info?: any; // Structured profile details from API
 }
 
 export interface DbLead {
@@ -254,6 +255,7 @@ create table if not exists public.integrations (
   status text not null default 'Desconectado',
   ultima_sincronizacao timestamp with time zone,
   profile_name text,
+  user_info jsonb,
   created_at timestamp with time zone default timezone('utc'::text, now()),
   updated_at timestamp with time zone default timezone('utc'::text, now())
 );

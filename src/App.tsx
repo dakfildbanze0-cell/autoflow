@@ -42,6 +42,148 @@ import {
 
 
 // Custom typescript interfaces for clarity
+interface CallbackProps {
+  setPublicPath: (path: string | null) => void;
+  completeIntegrationFlow: (platform: string, token: string, extraData?: any) => Promise<void>;
+  currentUser: any;
+}
+
+function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUser }: CallbackProps) {
+  const [status, setStatus] = useState<'LOADING' | 'SUCCESS' | 'ERROR'>('LOADING');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    const processCallback = async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const code = urlParams.get('code');
+      const error = urlParams.get('error');
+
+      if (error) {
+        setStatus('ERROR');
+        setErrorMsg(error);
+        return;
+      }
+
+      if (!code) {
+        setStatus('ERROR');
+        setErrorMsg('Código de autorização não encontrado.');
+        return;
+      }
+
+      try {
+        console.log('Iniciando troca de token TikTok para o código:', code);
+        const response = await fetch('/api/auth/exchange', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code, platform: 'TikTok' })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+          setStatus('SUCCESS');
+          
+          if (window.opener) {
+            // Se estiver num popup, notifica a janela pai
+            window.opener.postMessage({
+              type: 'OAUTH_AUTH_SUCCESS',
+              platform: 'TikTok',
+              token: data.token,
+              extraData: { 
+                userInfo: data.user,
+                openId: data.openId 
+              }
+            }, window.location.origin);
+            
+            setTimeout(() => window.close(), 1500);
+          } else {
+            // Fallback para quando não é popup (redirecionamento direto)
+            await completeIntegrationFlow('TikTok', data.token, { 
+              userInfo: data.user,
+              openId: data.openId 
+            });
+            
+            setTimeout(() => {
+              window.location.href = '/dashboard';
+            }, 2000);
+          }
+        } else {
+          if (window.opener) {
+            window.opener.postMessage({
+              type: 'OAUTH_AUTH_ERROR',
+              platform: 'TikTok',
+              error: data.error || 'Erro na troca de token.'
+            }, window.location.origin);
+            setTimeout(() => window.close(), 2000);
+          }
+          setStatus('ERROR');
+          setErrorMsg(data.error || 'Erro na troca de token.');
+        }
+      } catch (err: any) {
+        console.error('Erro no processCallback:', err);
+        setStatus('ERROR');
+        setErrorMsg(err.message || 'Erro de conexão.');
+      }
+    };
+
+    processCallback();
+  }, []);
+
+  return (
+    <div className="min-h-screen bg-[#0d0e12] flex items-center justify-center p-2 text-[#e5e2e1] font-sans antialiased">
+      <motion.div 
+        initial={{ opacity: 0, scale: 0.95 }}
+        animate={{ opacity: 1, scale: 1 }}
+        className="bg-[#12131a] rounded-xl p-6 max-w-sm w-full flex flex-col items-center gap-2 shadow-2xl border border-purple-500/10"
+      >
+        <div className="w-12 h-12 bg-gradient-to-tr from-purple-700 to-indigo-500 rounded-xl flex items-center justify-center shadow-lg shadow-purple-500/20">
+          <Bot className="text-white" size={24} />
+        </div>
+
+        <div className="flex flex-col items-center gap-1 text-center">
+          <h2 className="text-xl font-black text-white">AutoFlow</h2>
+          
+          {status === 'LOADING' && (
+            <div className="flex flex-col items-center gap-2">
+              <RefreshCw className="animate-spin text-purple-500" size={20} />
+              <p className="text-sm text-gray-400">Conectando conta TikTok...</p>
+            </div>
+          )}
+
+          {status === 'SUCCESS' && (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center">
+                <CheckCircle2 className="text-emerald-500" size={16} />
+              </div>
+              <p className="text-sm text-emerald-400 font-bold uppercase tracking-widest">Conectado com Sucesso</p>
+              <p className="text-xs text-gray-500">Redirecionando para o dashboard...</p>
+            </div>
+          )}
+
+          {status === 'ERROR' && (
+            <div className="flex flex-col items-center gap-2">
+              <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
+                <XCircle className="text-red-500" size={16} />
+              </div>
+              <p className="text-sm text-red-500 font-bold uppercase tracking-widest">Falha na Conexão</p>
+              <p className="text-xs text-gray-500">{errorMsg}</p>
+              <button 
+                onClick={() => {
+                  window.history.pushState({}, '', '/');
+                  setPublicPath(null);
+                }}
+                className="mt-1 text-xs text-gray-400 hover:text-white underline"
+              >
+                Voltar ao início
+              </button>
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 interface AutomationRobot {
   id: number;
   name: string;
@@ -88,7 +230,91 @@ interface AdTemplate {
 }
 
 export default function App() {
-  const [currentView, setCurrentView] = useState('Dashboard');
+  const [currentView, setCurrentView] = useState(() => {
+    // Initialize view from URL path
+    const path = window.location.pathname.replace('/', '');
+    if (!path || path === 'dashboard' || path === '') return 'Dashboard';
+    
+    // Normalize path to view name mapping
+    const pathViewMap: Record<string, string> = {
+      'dashboard': 'Dashboard',
+      'anuncios': 'Anúncios',
+      'publicacoes': 'Publicações',
+      'robôs-automações': 'Robôs (automações)',
+      'calendario': 'Calendário',
+      'clientes': 'Clientes',
+      'leads': 'Leads',
+      'relatórios': 'Relatórios',
+      'perfil': 'Perfil',
+      'integrações': 'Integrações',
+      'modelos': 'Modelos',
+      'plano-profissional': 'Plano profissional',
+      'configurações': 'Configurações'
+    };
+
+    if (pathViewMap[path]) return pathViewMap[path];
+    
+    // Fallback basic mapping: robot-manager -> Robot Manager
+    const viewName = path.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+    return viewName;
+  });
+
+  // Helper to normalize view names to URL slugs
+  const getViewSlug = (view: string) => {
+    const map: Record<string, string> = {
+      'Dashboard': 'dashboard',
+      'Anúncios': 'anuncios',
+      'Publicações': 'publicacoes',
+      'Robôs (automações)': 'robôs-automações',
+      'Calendário': 'calendario',
+      'Clientes': 'clientes',
+      'Leads': 'leads',
+      'Relatórios': 'relatórios',
+      'Perfil': 'perfil',
+      'Integrações': 'integrações',
+      'Modelos': 'modelos',
+      'Plano profissional': 'plano-profissional',
+      'Configurações': 'configurações'
+    };
+    return map[view] || view.toLowerCase().replace(/\s+/g, '-');
+  };
+
+  // Function to navigate between views with URL updates
+  const navigateTo = (view: string, e?: React.MouseEvent) => {
+    if (e) e.preventDefault();
+    const slug = getViewSlug(view);
+    window.history.pushState({}, '', `/${slug === 'dashboard' ? '' : slug}`);
+    setCurrentView(view);
+  };
+
+  // Sync state on browser back/forward
+  useEffect(() => {
+    const handlePopState = () => {
+      const path = window.location.pathname.replace('/', '');
+      if (!path || path === 'dashboard' || path === '') {
+        setCurrentView('Dashboard');
+      } else {
+        const pathViewMap: Record<string, string> = {
+          'dashboard': 'Dashboard',
+          'anuncios': 'Anúncios',
+          'publicacoes': 'Publicações',
+          'robôs-automações': 'Robôs (automações)',
+          'calendario': 'Calendário',
+          'clientes': 'Clientes',
+          'leads': 'Leads',
+          'relatórios': 'Relatórios',
+          'perfil': 'Perfil',
+          'integrações': 'Integrações',
+          'modelos': 'Modelos',
+          'plano-profissional': 'Plano profissional'
+        };
+        const viewName = pathViewMap[path] || path.split('-').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
+        setCurrentView(viewName);
+      }
+    };
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   // Supabase connection and schema synchronization states
   const [supabaseLoading, setSupabaseLoading] = useState(false);
@@ -246,8 +472,23 @@ export default function App() {
 
   useEffect(() => {
     const path = window.location.pathname;
-    if (path === '/terms' || path === '/privacy') {
+    const urlParams = new URLSearchParams(window.location.search);
+    const code = urlParams.get('code');
+    const platform = urlParams.get('platform');
+
+    if (path === '/terms' || path === '/privacy' || path === '/callback' || path.startsWith('/dashboard')) {
+      // Se for /dashboard mas NÃO tiver code/error, é acesso normal, não renderiza publicPath
+      if (path === '/dashboard' && !code && !urlParams.get('error')) {
+        navigateTo('Dashboard');
+        return;
+      }
       setPublicPath(path);
+    } else if (code && platform) {
+      // Handle the redirect scenario from server.ts
+      setPublicPath('/dashboard');
+    } else if (path !== '/') {
+      // Initial load routing handled by currentView lazy initializer, 
+      // but we ensure normalized layout
     }
   }, []);
 
@@ -300,17 +541,34 @@ export default function App() {
 
     addLog(`Protocolo de autorização OAuth2 iniciado para ${platform}. Requisitando URL oficial...`);
 
+    // Janela de login oficial (aberta imediatamente para evitar bloqueios de popup)
+    const width = 600;
+    const height = 750;
+    const left = (window.screen.width / 2) - (width / 2);
+    const top = (window.screen.height / 2) - (height / 2);
+    const authWindow = window.open('about:blank', `login_${platform}`, `width=${width},height=${height},top=${top},left=${left}`);
+
+    if (!authWindow) {
+      addLog(`Janela de login bloqueada pelo browser para ${platform}.`, 'Aviso');
+      alert(`Por favor, permita pop-ups para ligar a sua conta ${platform}.`);
+      setConnectingPlatform(null);
+      return;
+    }
+
     try {
       // 1. Requisitar URL de autorização ao servidor
       const response = await fetch(`/api/auth/url/${platform}`);
       
       if (!response.ok) {
+        if (authWindow) authWindow.close();
         const errorData = await response.json();
         addLog(`Falha na negociação com o gateway de ${platform}: ${errorData.message || 'Não configurado'}`, 'Critico');
         
         // Se for 404 (não configurado), avisar o utilizador como fazer
         if (response.status === 404) {
-          alert(`CONFIGURAÇÃO NECESSÁRIA:\n\nPara ligar ao ${platform} real (sem simulação), é necessário adicionar o CLIENT_ID e CLIENT_SECRET nas variáveis de ambiente da aplicação.\n\nCallback URL a configurar na plataforma:\n${window.location.origin}/auth/callback/${platform}`);
+          const redirectUrl = platform === 'TikTok' ? 'https://aautoflow.vercel.app/callback' : `${window.location.origin}/auth/callback/${platform}`;
+          const varName = platform === 'TikTok' ? 'TIKTOK_CLIENT_KEY' : `${platform.toUpperCase()}_CLIENT_ID`;
+          alert(`Configuração necessária:\n\nPara ligar ao ${platform} real (sem simulação), é necessário adicionar o ${varName} e o segredo correspondente nas variáveis de ambiente da aplicação.\n\nCallback URL a configurar na plataforma:\n${redirectUrl}`);
         } else {
           alert(`Erro ao obter URL de autorização: ${errorData.message || 'Erro desconhecido'}`);
         }
@@ -320,20 +578,10 @@ export default function App() {
 
       const { url } = await response.json();
 
-      // 2. Abrir portal de login oficial
-      const width = 600;
-      const height = 750;
-      const left = (window.screen.width / 2) - (width / 2);
-      const top = (window.screen.height / 2) - (height / 2);
-      
-      const authWindow = window.open(url, `login_${platform}`, `width=${width},height=${height},top=${top},left=${left}`);
-
-      if (!authWindow) {
-        addLog(`Janela de login bloqueada pelo browser para ${platform}.`, 'Aviso');
-        alert(`Por favor, permita pop-ups para ligar a sua conta ${platform}.`);
-        setConnectingPlatform(null);
-      }
+      // 2. Redirecionar a janela já aberta para o portal de login oficial
+      authWindow.location.href = url;
     } catch (err) {
+      if (authWindow) authWindow.close();
       // Fallback para OLX ou plataformas sem config real ainda
       if (platform === 'OLX') {
         const authUrl = `/platform/login/${platform}`;
@@ -352,16 +600,17 @@ export default function App() {
       const origin = event.origin;
       if (!origin.endsWith('.run.app') && !origin.includes('localhost')) return;
 
-      if (event.data?.type === 'OAUTH_AUTH_SUCCESS') {
-        const { platform, token } = event.data;
-        await completeIntegrationFlow(platform, token);
-      } else if (event.data?.type === 'OAUTH_AUTH_ERROR') {
+      if (event.data?.type === 'OAUTH_AUTH_SUCCESS' || event.data?.type === 'OAUTH_SUCCESS') {
+        const { platform, token, extraData } = event.data;
+        await completeIntegrationFlow(platform, token, extraData);
+        setConnectingPlatform(null);
+      } else if (event.data?.type === 'OAUTH_AUTH_ERROR' || event.data?.type === 'OAUTH_ERROR') {
         const { platform, error } = event.data;
         setSystemLogs(prev => [{
           id: `log-${Date.now()}`,
           timestamp: new Date().toTimeString().split(' ')[0],
           level: 'Critico',
-          message: `O utilizador cancelou ou a plataforma ${platform} devolveu erro: ${error}`,
+          message: `O utilizador cancelou ou a plataforma ${platform} devolveu erro: ${error || event.data.error}`,
           robot_name: 'Robot Security Manager',
           responsibleUser: currentUser?.email || 'Sistema'
         }, ...prev]);
@@ -373,7 +622,7 @@ export default function App() {
     return () => window.removeEventListener('message', handleMessage);
   }, [currentUser, integrations]);
 
-  const completeIntegrationFlow = async (platform: string, token: string) => {
+  const completeIntegrationFlow = async (platform: string, token: string, extraData?: any) => {
     const addLog = (msg: string, level: 'Info' | 'Aviso' | 'Critico' = 'Info') => {
       const timestamp = new Date().toTimeString().split(' ')[0];
       setSystemLogs(prev => [{
@@ -393,6 +642,10 @@ export default function App() {
       await new Promise(r => setTimeout(r, 600));
       addLog(`Etapa 7: Validando tokens recebidos via Backend Security Service...`, 'Info');
       
+      if (extraData?.userInfo) {
+        addLog(`Perfil identificado: ${extraData.userInfo.display_name} (${platform})`, 'Info');
+      }
+
       await new Promise(r => setTimeout(r, 600));
       addLog(`Etapa 8: Encriptando e guardando tokens na base de dados (AES-256).`, 'Info');
 
@@ -402,7 +655,8 @@ export default function App() {
         access_token: token || `at_live_${Math.random().toString(36).substring(8)}`,
         refresh_token: `rt_live_${Math.random().toString(36).substring(8)}`,
         expires_at: new Date(Date.now() + 3600000 * 24 * 90).toISOString(),
-        ultima_sincronizacao: new Date().toISOString()
+        ultima_sincronizacao: new Date().toISOString(),
+        user_info: extraData?.userInfo
       };
       
       if (currentUser && isSupabaseConfigured) {
@@ -1087,7 +1341,7 @@ export default function App() {
     setNewPrice('');
     setNewLocation('');
     setShowCreateModal(false);
-    setCurrentView('Publicações');
+    navigateTo('Publicações');
   };
 
   const handleAddClient = async (e: React.FormEvent) => {
@@ -1180,7 +1434,7 @@ export default function App() {
     };
     setPosts([templatePost, ...posts]);
     setShowModelsModal(false);
-    setCurrentView('Publicações');
+    navigateTo('Publicações');
   };
 
   const generateCopywriting = (tpl: AdTemplate) => {
@@ -1191,7 +1445,7 @@ export default function App() {
   const loadDraftToAdCreator = () => {
     setNewTitle(generatedDraftTitle);
     setNewDescription(generatedDraftText);
-    setCurrentView('Anúncios');
+    navigateTo('Anúncios');
   };
 
   // Nav metadata helper
@@ -1288,6 +1542,9 @@ export default function App() {
 
   // PUBLIC PAGES RENDERING
   if (publicPath) {
+    if (publicPath === '/callback' || publicPath === '/dashboard') {
+      return <TikTokCallbackView setPublicPath={setPublicPath} completeIntegrationFlow={completeIntegrationFlow} currentUser={currentUser} />;
+    }
     const isTerms = publicPath === '/terms';
     
     return (
@@ -1560,10 +1817,12 @@ export default function App() {
         <nav className="flex-1 flex flex-col gap-1 overflow-y-auto pr-1">
           {navItems.map((item) => {
             const isActive = currentView === item.name;
+            const slug = getViewSlug(item.name);
             return (
-              <button
+              <a
                 key={item.name}
-                onClick={() => setCurrentView(item.name)}
+                href={slug === 'dashboard' ? '/' : `/${slug}`}
+                onClick={(e) => navigateTo(item.name, e)}
                 className={`flex items-center gap-2 px-3 py-2 rounded-md transition-all duration-150 text-left text-base ${
                   isActive 
                     ? 'bg-[#1c1830] text-purple-200 font-bold shadow-sm shadow-purple-500/5' 
@@ -1572,7 +1831,7 @@ export default function App() {
               >
                 <item.icon size={18} className="text-white shrink-0" />
                 <span>{item.name}</span>
-              </button>
+              </a>
             );
           })}
           
@@ -1589,8 +1848,22 @@ export default function App() {
         {/* Lower Sidebar widgets - No borders, gap max 8px, font sizes increased */}
         <div className="flex flex-col gap-2 pt-2">
           
+          {/* Helpful Links Section - User request: "cada tela no app deve ter links" */}
+          <div className="flex flex-col gap-1 p-2 bg-[#15161c] rounded-lg">
+            <span className="text-xs font-black text-gray-500 uppercase tracking-widest pl-1 mb-1">Links Rápidos</span>
+            <a href="/" onClick={(e) => navigateTo('Dashboard', e)} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
+              <Globe size={14} /> <span>Página inicial</span>
+            </a>
+            <a href="/terms" onClick={(e) => { e.preventDefault(); setPublicPath('/terms'); }} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
+              <FileSignature size={14} /> <span>Termos de uso</span>
+            </a>
+            <a href="/privacy" onClick={(e) => { e.preventDefault(); setPublicPath('/privacy'); }} className="flex items-center gap-2 text-sm text-gray-400 hover:text-white transition-colors pl-1">
+              <ShieldCheck size={14} /> <span>Privacidade</span>
+            </a>
+          </div>
+
           {/* Plano Profissional widget */}
-          <div className="bg-[#15161c] rounded-lg p-2 flex flex-col gap-2 hover:bg-[#181922] transition-colors cursor-pointer" onClick={() => setCurrentView('Plano profissional')}>
+          <div className="bg-[#15161c] rounded-lg p-2 flex flex-col gap-2 hover:bg-[#181922] transition-colors cursor-pointer" onClick={() => navigateTo('Plano profissional')}>
             <div className="flex justify-between items-center">
               <span className="text-base font-bold text-white">Plano profissional</span>
             </div>
@@ -1643,7 +1916,7 @@ export default function App() {
                 setNewDescription('');
                 setNewPrice('');
                 setNewLocation('');
-                setCurrentView('Anúncios');
+                navigateTo('Anúncios');
               }}
               className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold px-3 py-1.5 rounded-md flex items-center gap-1 transition-all shadow shadow-purple-600/20 active:scale-[0.98]"
             >
@@ -1811,6 +2084,34 @@ export default function App() {
                   </div>
                 </div>
               </div>
+
+              {/* TikTok status banner if connected */}
+              {integrations.find(i => i.plataforma === 'TikTok' && i.status === 'Conectado') && (
+                <motion.div 
+                  initial={{ opacity: 0, y: -5 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="bg-emerald-500/10 border border-emerald-500/10 p-2 rounded-xl flex items-center justify-between gap-2 overflow-hidden mx-0.5"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
+                      <Verified className="text-emerald-500" size={20} />
+                    </div>
+                    <div className="flex flex-col leading-tight">
+                      <span className="text-sm font-black text-emerald-400 capitalize">Conexão TikTok Ativa</span>
+                      {integrations.find(i => i.plataforma === 'TikTok')?.user_info && (
+                        <span className="text-xs text-gray-400 font-bold">
+                          Autenticado como: @{integrations.find(i => i.plataforma === 'TikTok')?.user_info.display_name}
+                        </span>
+                      )}
+                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tight mt-0.5">Sincronização em tempo real habilitada 🟢</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2 pr-2">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+                    <span className="text-xs font-black text-emerald-600 uppercase tracking-widest animate-pulse">Live Data</span>
+                  </div>
+                </motion.div>
+              )}
 
               {/* Graphs layer - Borders removed, gaps strictly max 8px */}
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
@@ -2052,7 +2353,7 @@ export default function App() {
 
                   <div className="flex justify-center pt-2">
                     <button 
-                      onClick={() => setCurrentView('Robôs (automações)')} 
+                      onClick={() => navigateTo('Robôs (automações)')} 
                       className="text-white hover:opacity-80 text-sm font-bold inline-flex items-center gap-1 transition-colors group"
                     >
                       Controlar todos os robôs <ArrowRight size={14} className="text-white transform group-hover:translate-x-0.5 transition-transform" />
@@ -2066,7 +2367,7 @@ export default function App() {
                     <div className="flex justify-between items-center mb-2 px-1">
                       <h3 className="text-lg font-bold text-white">Publicações recentes</h3>
                       <button 
-                        onClick={() => setCurrentView('Publicações')}
+                        onClick={() => navigateTo('Publicações')}
                         className="text-white hover:opacity-80 text-sm font-bold flex items-center gap-0.5"
                       >
                         Ver todas →
@@ -2119,7 +2420,7 @@ export default function App() {
                 </div>
                 
                 <button 
-                  onClick={() => setCurrentView('Modelos')}
+                  onClick={() => navigateTo('Modelos')}
                   className="bg-purple-600 hover:bg-purple-500 text-white text-sm font-bold px-3 py-2 rounded-lg transition-colors shrink-0 active:scale-[0.98]"
                 >
                   Ver modelos
@@ -3279,7 +3580,7 @@ export default function App() {
                     </div>
 
                     <button 
-                      onClick={() => setCurrentView('Integrações')}
+                      onClick={() => navigateTo('Integrações')}
                       className="w-full text-left bg-[#12131a] hover:bg-[#20212f] px-2 py-1.5 rounded text-xs text-white font-bold flex items-center justify-between"
                     >
                       <span>Gerir integrações externas</span>
@@ -3381,6 +3682,11 @@ export default function App() {
                           </div>
                           <div className="flex flex-col">
                             <span className="text-lg font-black text-white leading-none">{platform}</span>
+                            {existing?.user_info && (
+                              <span className="text-xs text-purple-400 font-bold mt-1 max-w-[150px] truncate">
+                                @{existing.user_info.display_name}
+                              </span>
+                            )}
                             <div className="flex items-center gap-1.5 mt-1">
                               <span className={`w-2 h-2 rounded-full ${
                                 status === 'Conectado' ? 'bg-emerald-500 animate-pulse' :
@@ -3444,16 +3750,16 @@ export default function App() {
                         <div className="bg-[#12131a]/40 p-2.5 rounded border border-gray-850 flex items-center justify-between text-[11px] text-gray-400 font-mono mt-0.5">
                           <div className="flex items-center gap-2">
                             <div className="flex items-center gap-1.5">
-                              <span className="text-gray-500 lowercase">id:</span> {existing.access_token?.substring(0, 12)}...
+                              <span className="text-gray-500">Id:</span> {existing.access_token?.substring(0, 12)}...
                             </div>
                             <span className="text-gray-700">|</span>
                             <div className="flex items-center gap-1.5">
-                              <span className="text-gray-500 lowercase">expira:</span> {new Date(existing.expires_at!).toLocaleDateString()}
+                              <span className="text-gray-500">Expira:</span> {new Date(existing.expires_at!).toLocaleDateString()}
                             </div>
                           </div>
                           <div className="flex items-center gap-1.5">
                             <Clock size={10} className="text-gray-600" />
-                            <span className="lowercase">sinc: {new Date(existing.ultima_sincronizacao!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            <span>Sinc: {new Date(existing.ultima_sincronizacao!).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                           </div>
                         </div>
                       )}
@@ -3561,7 +3867,7 @@ export default function App() {
                           };
                           setPosts([newPost, ...posts]);
                           alert('Copywriting publicada com sucesso!');
-                          setCurrentView('Publicações');
+                          navigateTo('Publicações');
                         }}
                         className="bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-sm px-4 py-2 rounded transition-all flex items-center justify-center gap-1"
                       >
@@ -3635,6 +3941,39 @@ export default function App() {
             </div>
           )}
 
+          {/* Persistent Footer Links - User request: "cada tela no app deve ter links" */}
+          <footer className="mt-8 py-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 px-2 bg-gradient-to-b from-transparent to-black/20 rounded-b-xl">
+            <div className="flex items-center gap-2">
+              <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center">
+                <Bot size={16} className="text-purple-500" />
+              </div>
+              <span className="text-sm font-black text-gray-500">AutoFlow &copy; 2024</span>
+            </div>
+            <div className="flex items-center gap-6">
+              <a 
+                href="/terms"
+                onClick={(e) => { e.preventDefault(); setPublicPath('/terms'); }} 
+                className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest"
+              >
+                Termos
+              </a>
+              <a 
+                href="/privacy"
+                onClick={(e) => { e.preventDefault(); setPublicPath('/privacy'); }} 
+                className="text-xs font-bold text-gray-500 hover:text-white transition-colors uppercase tracking-widest"
+              >
+                Privacidade
+              </a>
+              <a 
+                href="https://aautoflow.vercel.app/dashboard"
+                target="_blank"
+                rel="noreferrer"
+                className="text-xs font-bold text-white bg-purple-600/20 px-3 py-1.5 rounded-full hover:bg-purple-600/40 transition-all flex items-center gap-1.5 border border-purple-500/20"
+              >
+                Vercel Dashboard <ArrowRight size={10} />
+              </a>
+            </div>
+          </footer>
         </div>
       </main>
 
