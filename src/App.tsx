@@ -566,7 +566,7 @@ export default function App() {
         
         // Se for 404 (não configurado), avisar o utilizador como fazer
         if (response.status === 404) {
-          const redirectUrl = platform === 'TikTok' ? 'https://aautoflow.vercel.app/callback' : `${window.location.origin}/auth/callback/${platform}`;
+          const redirectUrl = platform === 'TikTok' ? 'https://aautoflow.vercel.app/dashboard' : `${window.location.origin}/auth/callback/${platform}`;
           const varName = platform === 'TikTok' ? 'TIKTOK_CLIENT_KEY' : `${platform.toUpperCase()}_CLIENT_ID`;
           alert(`Configuração necessária:\n\nPara ligar ao ${platform} real (sem simulação), é necessário adicionar o ${varName} e o segredo correspondente nas variáveis de ambiente da aplicação.\n\nCallback URL a configurar na plataforma:\n${redirectUrl}`);
         } else {
