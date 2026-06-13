@@ -1583,7 +1583,7 @@ export default function App() {
         <div className="max-w-3xl mx-auto w-full flex flex-col gap-2">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-800 pb-6">
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
               <div className="w-10 h-10 bg-gradient-to-tr from-purple-700 to-indigo-500 rounded-lg flex items-center justify-center">
                 <Bot className="text-white" size={20} />
               </div>
@@ -1609,9 +1609,9 @@ export default function App() {
           >
             <div className="flex flex-col gap-2">
               <h2 className="text-3xl font-black text-white">
-                {isTerms ? 'Termos de Serviço' : 'Política de Privacidade'}
+                {isTerms ? 'Termos de serviço' : 'Política de privacidade'}
               </h2>
-              <p className="text-sm text-gray-500 text-right">AutoFlow Platform</p>
+              <p className="text-sm text-gray-500 text-right">Autoflow platform</p>
               <p className="text-sm text-gray-500">Última atualização: Junho de 2024</p>
             </div>
 
@@ -1669,7 +1669,7 @@ export default function App() {
           {/* Footer */}
           <div className="border-t border-gray-800 pt-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-gray-600 mb-12">
             <span>© 2024 AutoFlow Automation Systems.</span>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
               <button 
                 onClick={() => {
                   setPublicPath('/terms');
@@ -4015,7 +4015,7 @@ export default function App() {
               </div>
               <span className="text-sm font-black text-gray-500">AutoFlow &copy; 2024</span>
             </div>
-            <div className="flex items-center gap-6">
+            <div className="flex items-center gap-2">
               <a 
                 href="/terms"
                 onClick={(e) => { e.preventDefault(); setPublicPath('/terms'); }} 

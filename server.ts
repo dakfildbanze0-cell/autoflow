@@ -116,10 +116,22 @@ async function startServer() {
   // Specifically handle the /dashboard and other view paths requested for deep linking
   app.get(['/', '/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/calendario', '/clientes', '/leads', '/relatórios', '/configurações', '/modelos', '/financeiro', '/plano-profissional', '/terms', '/privacy', '/callback/youtube', '/auth/callback/:platform'], async (req: any, res: any, next: any) => {
     const { code, error } = req.query;
+    const { platform } = req.params;
     
     // Auth redirect handling
-    if (code) {
-      return res.redirect(`/?code=${code}&platform=TikTok`);
+    if (code || error) {
+      let detectedPlatform = (req.query.platform as string) || platform;
+      if (!detectedPlatform && req.path.includes('youtube')) detectedPlatform = 'YouTube';
+      if (!detectedPlatform) detectedPlatform = 'TikTok'; // Default fallback
+
+      console.log(`[OAuth Handler] Code/Error detected at ${req.path}. Redirecting to app root with platform=${detectedPlatform}`);
+      
+      const params = new URLSearchParams();
+      if (code) params.append('code', code as string);
+      if (error) params.append('error', error as string);
+      params.append('platform', detectedPlatform);
+      
+      return res.redirect(`/?${params.toString()}`);
     }
     
     if (process.env.NODE_ENV === "production") {
@@ -153,8 +165,9 @@ async function startServer() {
 
       console.log(`[OAuth Exchange Request]`);
       console.log(`- Platform: ${platform}`);
-      console.log(`- Redirect URI used: ${redirectUri}`);
-      console.log(`- App URL detected: ${appUrl}`);
+      console.log(`- Configured Redirect URI: ${config.redirectUri || "None (default will be used)"}`);
+      console.log(`- Final Redirect URI used: ${redirectUri}`);
+      console.log(`- Client ID: ${config.clientId?.substring(0, 5)}...`);
 
       let tokenResponse;
       if (platform === 'TikTok' || platform === 'YouTube') {
@@ -172,7 +185,7 @@ async function startServer() {
         }
 
         const body = new URLSearchParams(bodyParams);
-        console.log(`- Exchange URL: ${config.tokenUrl}`);
+        console.log(`- Token Exchange URL: ${config.tokenUrl}`);
         
         try {
           tokenResponse = await axios.post(config.tokenUrl, body.toString(), {
@@ -180,9 +193,13 @@ async function startServer() {
           });
           console.log(`- Exchange Success: ${tokenResponse.status}`);
         } catch (axiosErr: any) {
-          console.error(`- Exchange Failure: ${axiosErr.response?.status}`);
+          console.error(`- Exchange Failure [${platform}]: ${axiosErr.response?.status || 'No Response'}`);
           console.error(`- Error Data:`, JSON.stringify(axiosErr.response?.data || axiosErr.message));
-          throw axiosErr;
+          
+          // Re-throw with more context
+          const detailedError = new Error(`Exchange failed: ${JSON.stringify(axiosErr.response?.data || axiosErr.message)}`);
+          (detailedError as any).response = axiosErr.response;
+          throw detailedError;
         }
       } else {
         tokenResponse = await axios.post(config.tokenUrl, {
@@ -196,8 +213,18 @@ async function startServer() {
 
       // For TikTok, tokens might be in data.data or data
       const tokenData = tokenResponse.data;
+      console.log(`- Received response keys: ${Object.keys(tokenData).join(', ')}`);
+      
       const accessToken = tokenData.access_token || tokenData.data?.access_token;
       const openId = tokenData.open_id || tokenData.data?.open_id;
+
+      if (!accessToken) {
+        console.error(`- Error: No access_token found in response from ${platform}`);
+        return res.status(400).json({ 
+          error: 'Access token não retornado', 
+          details: tokenData 
+        });
+      }
 
       let userBasicInfo = null;
       if (platform === 'TikTok' && accessToken) {
