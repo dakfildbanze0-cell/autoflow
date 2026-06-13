@@ -44,6 +44,15 @@ async function startServer() {
           clientSecret: process.env.WHATSAPP_CLIENT_SECRET || process.env.FACEBOOK_CLIENT_SECRET,
           scope: 'whatsapp_business_management,whatsapp_business_messaging'
         };
+      case 'YouTube':
+        return {
+          authUrl: 'https://accounts.google.com/o/oauth2/v2/auth',
+          tokenUrl: 'https://oauth2.googleapis.com/token',
+          clientId: process.env.YOUTUBE_CLIENT_ID,
+          clientSecret: process.env.YOUTUBE_CLIENT_SECRET,
+          scope: 'https://www.googleapis.com/auth/youtube.readonly https://www.googleapis.com/auth/userinfo.profile',
+          redirectUri: 'https://aautoflow.vercel.app/callback/youtube'
+        };
       default:
         return null;
     }
@@ -62,11 +71,11 @@ async function startServer() {
       });
     }
 
-    const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
-    const redirectUri = (platform === 'TikTok' && config.redirectUri) 
-      ? config.redirectUri 
-      : `${appUrl}/auth/callback/${platform}`;
+    const appUrl = process.env.APP_URL || `https://${req.get('host')}`;
+    const redirectUri = config.redirectUri || `${appUrl}/auth/callback/${platform}`;
     
+    console.log(`[OAuth Redirect Prep] Platform: ${platform}, Target RedirectURI: ${redirectUri}`);
+
     const params = new URLSearchParams();
     
     if (platform === 'TikTok') {
@@ -79,6 +88,12 @@ async function startServer() {
     params.append('scope', config.scope!);
     params.append('response_type', 'code');
     params.append('state', Math.random().toString(36).substring(7));
+
+    // Specific params for platforms
+    if (platform === 'YouTube') {
+      params.append('access_type', 'offline');
+      params.append('prompt', 'consent');
+    }
 
     res.json({ url: `${config.authUrl}?${params.toString()}` });
   });
@@ -99,7 +114,7 @@ async function startServer() {
   };
 
   // Specifically handle the /dashboard and other view paths requested for deep linking
-  app.get(['/', '/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/calendario', '/clientes', '/leads', '/relatórios', '/configurações', '/modelos', '/financeiro', '/plano-profissional', '/terms', '/privacy'], async (req: any, res: any, next: any) => {
+  app.get(['/', '/dashboard', '/painel', '/perfil', '/conexoes', '/publicacoes', '/anuncios', '/integrações', '/robôs-automações', '/calendario', '/clientes', '/leads', '/relatórios', '/configurações', '/modelos', '/financeiro', '/plano-profissional', '/terms', '/privacy', '/callback/youtube', '/auth/callback/:platform'], async (req: any, res: any, next: any) => {
     const { code, error } = req.query;
     
     // Auth redirect handling
@@ -133,23 +148,42 @@ async function startServer() {
     }
 
     try {
-      const appUrl = process.env.APP_URL || `http://localhost:${PORT}`;
-      const redirectUri = (platform === 'TikTok' && config.redirectUri) 
-        ? config.redirectUri 
-        : `${appUrl}/auth/callback/${platform}`;
+      const appUrl = process.env.APP_URL || `https://${req.get('host')}`;
+      const redirectUri = config.redirectUri || `${appUrl}/auth/callback/${platform}`;
+
+      console.log(`[OAuth Exchange Request]`);
+      console.log(`- Platform: ${platform}`);
+      console.log(`- Redirect URI used: ${redirectUri}`);
+      console.log(`- App URL detected: ${appUrl}`);
 
       let tokenResponse;
-      if (platform === 'TikTok') {
-        const body = new URLSearchParams({
-          client_key: config.clientId!,
-          client_secret: config.clientSecret!,
+      if (platform === 'TikTok' || platform === 'YouTube') {
+        const bodyParams: any = {
           grant_type: 'authorization_code',
           redirect_uri: redirectUri,
-          code: code as string
-        });
-        tokenResponse = await axios.post(config.tokenUrl, body.toString(), {
-          headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
-        });
+          code: code as string,
+          client_id: config.clientId!,
+          client_secret: config.clientSecret!,
+        };
+        
+        if (platform === 'TikTok') {
+          bodyParams.client_key = config.clientId!;
+          delete bodyParams.client_id;
+        }
+
+        const body = new URLSearchParams(bodyParams);
+        console.log(`- Exchange URL: ${config.tokenUrl}`);
+        
+        try {
+          tokenResponse = await axios.post(config.tokenUrl, body.toString(), {
+            headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+          });
+          console.log(`- Exchange Success: ${tokenResponse.status}`);
+        } catch (axiosErr: any) {
+          console.error(`- Exchange Failure: ${axiosErr.response?.status}`);
+          console.error(`- Error Data:`, JSON.stringify(axiosErr.response?.data || axiosErr.message));
+          throw axiosErr;
+        }
       } else {
         tokenResponse = await axios.post(config.tokenUrl, {
           client_id: config.clientId,

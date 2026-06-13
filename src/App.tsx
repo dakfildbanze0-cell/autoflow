@@ -63,15 +63,20 @@ const safeJson = async (response: Response) => {
   }
 };
 
-function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUser }: CallbackProps) {
+function GenericAuthCallbackView({ setPublicPath, completeIntegrationFlow, currentUser }: CallbackProps) {
   const [status, setStatus] = useState<'LOADING' | 'SUCCESS' | 'ERROR'>('LOADING');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     const processCallback = async () => {
+      const path = window.location.pathname;
       const urlParams = new URLSearchParams(window.location.search);
       const code = urlParams.get('code');
       const error = urlParams.get('error');
+
+      // Detect platform from path or URL params
+      let platform = urlParams.get('platform') || 'TikTok';
+      if (path.includes('youtube')) platform = 'YouTube';
 
       if (error) {
         setStatus('ERROR');
@@ -86,11 +91,11 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
       }
 
       try {
-        console.log('Iniciando troca de token TikTok para o código:', code);
+        console.log(`Iniciando troca de token ${platform} para o código:`, code);
         const response = await fetch('/api/auth/exchange', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ code, platform: 'TikTok' })
+          body: JSON.stringify({ code, platform })
         });
 
         const data = await safeJson(response);
@@ -102,7 +107,7 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
             // Se estiver num popup, notifica a janela pai
             window.opener.postMessage({
               type: 'OAUTH_AUTH_SUCCESS',
-              platform: 'TikTok',
+              platform,
               token: data.token,
               extraData: { 
                 userInfo: data.user,
@@ -113,7 +118,7 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
             setTimeout(() => window.close(), 1500);
           } else {
             // Fallback para quando não é popup (redirecionamento direto)
-            await completeIntegrationFlow('TikTok', data.token, { 
+            await completeIntegrationFlow(platform, data.token, { 
               userInfo: data.user,
               openId: data.openId 
             });
@@ -126,13 +131,13 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
           if (window.opener) {
             window.opener.postMessage({
               type: 'OAUTH_AUTH_ERROR',
-              platform: 'TikTok',
-              error: data.error || 'Erro na troca de token.'
+              platform,
+              error: data.error || (data.details ? JSON.stringify(data.details) : 'Erro na troca de token.')
             }, window.location.origin);
             setTimeout(() => window.close(), 2000);
           }
           setStatus('ERROR');
-          setErrorMsg(data.error || 'Erro na troca de token.');
+          setErrorMsg(data.error || (data.details ? JSON.stringify(data.details) : 'Erro na troca de token.'));
         }
       } catch (err: any) {
         console.error('Erro no processCallback:', err);
@@ -143,6 +148,9 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
 
     processCallback();
   }, []);
+
+  // Determine platform from URL again for the UI text
+  const platformName = window.location.pathname.includes('youtube') ? 'YouTube' : (new URLSearchParams(window.location.search).get('platform') || 'TikTok');
 
   return (
     <div className="min-h-screen bg-[#0d0e12] flex items-center justify-center p-2 text-[#e5e2e1] font-sans antialiased">
@@ -161,7 +169,7 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
           {status === 'LOADING' && (
             <div className="flex flex-col items-center gap-2">
               <RefreshCw className="animate-spin text-purple-500" size={20} />
-              <p className="text-sm text-gray-400">Conectando conta TikTok...</p>
+              <p className="text-sm text-gray-400">Conectando conta {platformName}...</p>
             </div>
           )}
 
@@ -170,7 +178,7 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
               <div className="w-8 h-8 bg-emerald-500/20 rounded-full flex items-center justify-center">
                 <CheckCircle2 className="text-emerald-500" size={16} />
               </div>
-              <p className="text-sm text-emerald-400 font-bold uppercase tracking-widest">Conectado com Sucesso</p>
+              <p className="text-sm text-emerald-400 font-bold tracking-widest">Conectado com sucesso</p>
               <p className="text-xs text-gray-500">Redirecionando para o dashboard...</p>
             </div>
           )}
@@ -180,7 +188,7 @@ function TikTokCallbackView({ setPublicPath, completeIntegrationFlow, currentUse
               <div className="w-8 h-8 bg-red-500/20 rounded-full flex items-center justify-center">
                 <XCircle className="text-red-500" size={16} />
               </div>
-              <p className="text-sm text-red-500 font-bold uppercase tracking-widest">Falha na Conexão</p>
+              <p className="text-sm text-red-500 font-bold tracking-widest">Falha na conexão</p>
               <p className="text-xs text-gray-500">{errorMsg}</p>
               <button 
                 onClick={() => {
@@ -499,7 +507,7 @@ export default function App() {
     const code = urlParams.get('code');
     const platform = urlParams.get('platform');
 
-    if (path === '/terms' || path === '/privacy' || path === '/callback' || path.startsWith('/dashboard')) {
+    if (path === '/terms' || path === '/privacy' || path === '/callback' || path === '/callback/youtube' || path.startsWith('/dashboard')) {
       // Se for /dashboard mas NÃO tiver code/error, é acesso normal, não renderiza publicPath
       if (path === '/dashboard' && !code && !urlParams.get('error')) {
         navigateTo('Dashboard');
@@ -1565,14 +1573,14 @@ export default function App() {
 
   // PUBLIC PAGES RENDERING
   if (publicPath) {
-    if (publicPath === '/callback' || publicPath === '/dashboard') {
-      return <TikTokCallbackView setPublicPath={setPublicPath} completeIntegrationFlow={completeIntegrationFlow} currentUser={currentUser} />;
+    if (publicPath === '/callback' || publicPath === '/callback/youtube' || publicPath === '/dashboard') {
+      return <GenericAuthCallbackView setPublicPath={setPublicPath} completeIntegrationFlow={completeIntegrationFlow} currentUser={currentUser} />;
     }
     const isTerms = publicPath === '/terms';
     
     return (
       <div className="min-h-screen bg-[#0d0e12] flex flex-col text-[#e5e2e1] font-sans antialiased p-4 md:p-8">
-        <div className="max-w-3xl mx-auto w-full flex flex-col gap-8">
+        <div className="max-w-3xl mx-auto w-full flex flex-col gap-2">
           {/* Header */}
           <div className="flex items-center justify-between border-b border-gray-800 pb-6">
             <div className="flex items-center gap-3">
@@ -1597,7 +1605,7 @@ export default function App() {
           <motion.div 
             initial={{ opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
-            className="flex flex-col gap-6"
+            className="flex flex-col gap-2"
           >
             <div className="flex flex-col gap-2">
               <h2 className="text-3xl font-black text-white">
@@ -1610,47 +1618,47 @@ export default function App() {
             <div className="prose prose-invert prose-purple max-w-none text-gray-400 leading-relaxed space-y-6">
               {isTerms ? (
                 <>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">1. Aceitação dos Termos</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">1. Aceitação dos termos</h3>
                     <p>Ao aceder e utilizar o AutoFlow, concorda em cumprir e estar vinculado aos seguintes termos e condições. Se não concordar com qualquer parte destes termos, não poderá utilizar os nossos serviços.</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">2. Descrição do Serviço</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">2. Descrição do serviço</h3>
                     <p>O AutoFlow é uma plataforma de automação e gestão de publicações que permite aos utilizadores gerir várias contas de redes sociais e plataformas de marketplace a partir de uma interface centralizada.</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">3. Responsabilidades do Utilizador</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">3. Responsabilidades do utilizador</h3>
                     <p>O utilizador é o único responsável pelo conteúdo publicado através da plataforma e deve garantir que a sua utilização do serviço cumpre todas as leis locais e os termos de serviço das plataformas de terceiros conectadas.</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">4. Propriedade Intelectual</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">4. Propriedade intelectual</h3>
                     <p>Todos os direitos sobre a marca AutoFlow, software, design e algoritmos são propriedade exclusiva da nossa empresa. O utilizador retém todos os direitos sobre o conteúdo original enviado para a plataforma.</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">5. Limitação de Responsabilidade</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">5. Limitação de responsabilidade</h3>
                     <p>O AutoFlow não será responsável por quaisquer danos directos ou indirectos resultantes da utilização ou impossibilidade de utilização do serviço, ou por falhas técnicas nas plataformas de terceiros.</p>
                   </section>
                 </>
               ) : (
                 <>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">1. Informações que Recolhemos</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">1. Informações que recolhemos</h3>
                     <p>Recolhemos informações necessárias para a prestação do serviço, incluindo o seu endereço de e-mail ao criar uma conta, e tokens de autorização quando liga as suas contas de redes sociais através de OAuth2.</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">2. Utilização de Dados</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">2. Utilização de dados</h3>
                     <p>Utilizamos os seus dados exclusivamente para permitir a funcionalidade do AutoFlow e para melhorar a sua experiência. Não vendemos as suas informações pessoais a terceiros sob qualquer circunstância.</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">3. Segurança dos Tokens</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">3. Segurança dos tokens</h3>
                     <p>Os tokens de acesso às plataformas ligadas (Facebook, WhatsApp, etc.) são armazenados utilizando encriptação AES-256 e são transmitidos apenas via canais seguros (HTTPS).</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">4. Cookies</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">4. Cookies</h3>
                     <p>Utilizamos cookies apenas para manter a sua sessão activa e guardar as suas preferências de interface. Pode desactivar os cookies nas definições do seu browser, embora isso possa afectar algumas funcionalidades.</p>
                   </section>
-                  <section className="flex flex-col gap-3">
-                    <h3 className="text-lg font-bold text-white uppercase tracking-tight">5. Seus Direitos</h3>
+                  <section className="flex flex-col gap-2">
+                    <h3 className="text-lg font-bold text-white tracking-tight">5. Seus direitos</h3>
                     <p>Tem o direito de aceder, rectificar ou eliminar os seus dados pessoais a qualquer momento através das definições de perfil ou eliminando as suas integrações na plataforma.</p>
                   </section>
                 </>
@@ -1659,7 +1667,7 @@ export default function App() {
           </motion.div>
 
           {/* Footer */}
-          <div className="border-t border-gray-800 pt-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-4 text-xs text-gray-600 mb-12">
+          <div className="border-t border-gray-800 pt-8 mt-8 flex flex-col md:flex-row items-center justify-between gap-2 text-xs text-gray-600 mb-12">
             <span>© 2024 AutoFlow Automation Systems.</span>
             <div className="flex items-center gap-6">
               <button 
@@ -2149,7 +2157,7 @@ export default function App() {
                   animate={{ opacity: 1, y: 0 }}
                   className="bg-emerald-500/10 border border-emerald-500/10 p-2 rounded-xl flex items-center justify-between gap-2 overflow-hidden mx-0.5"
                 >
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-2">
                     <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
                       <Verified className="text-emerald-500" size={20} />
                     </div>
@@ -2160,12 +2168,12 @@ export default function App() {
                           Autenticado como: @{integrations.find(i => i.plataforma === 'TikTok')?.user_info.display_name}
                         </span>
                       )}
-                      <span className="text-[10px] text-gray-500 font-bold uppercase tracking-tight mt-0.5">Sincronização em tempo real habilitada 🟢</span>
+                      <span className="text-[10px] text-gray-500 font-bold tracking-tight mt-0.5">Sincronização em tempo real habilitada 🟢</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 pr-2">
                     <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                    <span className="text-xs font-black text-emerald-600 uppercase tracking-widest animate-pulse">Live Data</span>
+                    <span className="text-xs font-black text-emerald-600 tracking-widest animate-pulse">Dados ao vivo</span>
                   </div>
                 </motion.div>
               )}
@@ -2747,7 +2755,7 @@ export default function App() {
               {/* Bento Grid dos 9 Robôs Funcionais */}
               <div className="flex flex-col gap-2">
                 <div className="flex items-center justify-between ml-1">
-                  <span className="text-xs text-gray-400 font-bold uppercase tracking-wider">Estado de saúde e controle dos robôs de sistema</span>
+                  <span className="text-xs text-gray-400 font-bold tracking-wider">Estado de saúde e controle dos robôs de sistema</span>
                   <span className="text-[10px] text-purple-400 font-extrabold bg-purple-500/10 px-2 py-0.5 rounded border border-purple-500/10">Orquestração em tempo real</span>
                 </div>
 
@@ -2836,7 +2844,7 @@ export default function App() {
 
                   {/* Adicionador Manual de tarefas na Fila */}
                   <div className="bg-[#12131a] p-2 rounded bg-purple-500/5 border border-purple-500/10 flex flex-col gap-1.5">
-                    <span className="text-[10px] text-purple-300 font-extrabold uppercase leading-none">Criar tarefa no sistema SaaS de teste</span>
+                    <span className="text-[10px] text-purple-300 font-extrabold leading-none">Criar tarefa no sistema de teste</span>
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-1.5 items-end">
                       <div className="flex flex-col gap-0.5 md:col-span-6">
                         <label className="text-[10px] font-bold text-gray-400">Tipo de automação:</label>
@@ -3670,7 +3678,7 @@ export default function App() {
                   <div className="bg-emerald-500/10 border border-emerald-500/20 px-3 py-1.5 rounded-lg flex items-center gap-2">
                     <ShieldCheck className="text-emerald-400" size={18} />
                     <div className="flex flex-col leading-none">
-                      <span className="text-[10px] text-emerald-400 font-black uppercase tracking-widest">Segurança Ativa</span>
+                      <span className="text-[10px] text-emerald-400 font-black tracking-widest">Segurança ativa</span>
                       <span className="text-[10px] text-gray-400 font-bold">Encriptação AES-256</span>
                     </div>
                   </div>
@@ -3709,8 +3717,8 @@ export default function App() {
                 </div>
               </div>
 
-              <div className="flex flex-col gap-1.5 mt-1 px-1">
-                {['Facebook', 'Instagram', 'TikTok', 'WhatsApp', 'OLX'].map((platform) => {
+              <div className="flex flex-col gap-2 mt-1 px-1">
+                {['Facebook', 'Instagram', 'TikTok', 'WhatsApp', 'YouTube', 'OLX'].map((platform) => {
                   const existing = integrations.find(i => i.plataforma === platform);
                   const isConnecting = connectingPlatform === platform;
                   const status = isConnecting ? 'Conectando' : (existing?.status || 'Desconectado');
@@ -3729,6 +3737,7 @@ export default function App() {
                                   platform === 'Instagram' ? 'https://www.vectorlogo.zone/logos/instagram/instagram-icon.svg' :
                                   platform === 'TikTok' ? 'https://www.vectorlogo.zone/logos/tiktok/tiktok-icon.svg' :
                                   platform === 'WhatsApp' ? 'https://www.vectorlogo.zone/logos/whatsapp/whatsapp-icon.svg' :
+                                  platform === 'YouTube' ? 'https://www.vectorlogo.zone/logos/youtube/youtube-icon.svg' :
                                   'https://upload.wikimedia.org/wikipedia/commons/9/9e/OLX_logo.svg'
                                 } 
                                 alt={platform} 
@@ -3999,7 +4008,7 @@ export default function App() {
           )}
 
           {/* Persistent Footer Links - User request: "cada tela no app deve ter links" */}
-          <footer className="mt-8 py-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-4 px-2 bg-gradient-to-b from-transparent to-black/20 rounded-b-xl">
+          <footer className="mt-8 py-6 border-t border-white/5 flex flex-col sm:flex-row items-center justify-between gap-2 px-2 bg-gradient-to-b from-transparent to-black/20 rounded-b-xl">
             <div className="flex items-center gap-2">
               <div className="w-8 h-8 bg-white/5 rounded-lg flex items-center justify-center">
                 <Bot size={16} className="text-purple-500" />
